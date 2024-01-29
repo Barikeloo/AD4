@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+    <title>Aplicación NASA</title>
+</head>
+
+<body>
+    <header>
+        <h1>Aplicación NASA</h1>
+    </header>
+    <nav>
+        <a href="#" id="btn-favorites">Ver Favoritos</a>
+        <a href="#" id="btn-home">Inicio</a> <!-- Nuevo botón de Inicio -->
+        <input type="text" id="search-bar" placeholder="Buscar por explicación">
+    </nav>
+    <section id="api-section">
+        <!-- Aquí se mostrarán las imágenes y datos de la API -->
+    </section>
+
+    <section id="favorites-section">
+        <!-- Aquí se mostrarán las imágenes y datos de los favoritos -->
+    </section>
+
+    <!-- Puedes agregar más secciones según sea necesario -->
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const apiSection = document.getElementById('api-section');
+            const favoritesSection = document.getElementById('favorites-section');
+            let isLoading = false;
+
+            // Función para hacer la solicitud a la API y mostrar la explicación
+            const fetchAndDisplayExplanation = async () => {
+                try {
+                    const randomDate = getRandomDate();
+                    const response = await axios.get('https://api.nasa.gov/planetary/apod', {
+                        params: {
+                            api_key: 'JFFGqmUbQm6Xx2ZhahvwlZGR0NeIWK2Mvv5CbAxc',
+                            date: randomDate,
+                        },
+                    });
+
+                    const data = response.data;
+
+                    // Crear contenedor para cada imagen y datos
+                    const container = document.createElement('div');
+
+                    // Mostrar la imagen y datos relevantes
+                    const imageElement = document.createElement('img');
+                    imageElement.src = data.url;
+
+                    const titleElement = document.createElement('h2');
+                    titleElement.textContent = data.title;
+
+                    const explanationElement = document.createElement('p');
+                    explanationElement.textContent = data.explanation;
+
+                    // Añadir los elementos al contenedor
+                    container.appendChild(imageElement);
+                    container.appendChild(titleElement);
+                    container.appendChild(explanationElement);
+
+                    // Añadir el botón "Añadir a Favoritos" debajo de la explicación
+                    const addButton = document.createElement('button');
+                    addButton.textContent = 'Añadir a Favoritos';
+                    addButton.classList.add('favorite-button');
+                    container.appendChild(addButton);
+
+                    // Añadir el contenedor al DOM
+                    apiSection.appendChild(container);
+
+                } catch (error) {
+                    console.error('Error al obtener datos de la API', error);
+                }
+            };
+
+            const btnHome = document.getElementById('btn-home');
+            btnHome.addEventListener('click', async function () {
+                console.log('click')
+                apiSection.style.display = 'block';
+                favoritesSection.style.display = 'none';
+                await fetchAndDisplayExplanation();
+            });
+
+
+            // Cargar 5 explicaciones al principio
+            for (let i = 0; i < 5; i++) {
+                fetchAndDisplayExplanation();
+            }
+
+            // Añadir un evento de desplazamiento para cargar más imágenes al llegar al final de la página
+            window.addEventListener('scroll', function () {
+                const containers = document.querySelectorAll('#api-section > div');
+
+                containers.forEach((container) => {
+                    const rect = container.getBoundingClientRect();
+                    const windowHeight = window.innerHeight;
+
+                    // Si la parte inferior del último contenedor está dentro del área visible de la ventana
+                    if (rect.bottom <= windowHeight + 50) {
+                        fetchAndDisplayExplanation(); // Cargar más datos al alcanzar el final de la página
+                    }
+                });
+            });
+
+            // Función para obtener una fecha aleatoria en el rango del último año
+            function getRandomDate() {
+                const currentDate = new Date();
+                const lastYear = currentDate.getFullYear() - 1;
+                const randomYear = Math.floor(Math.random() * (currentDate.getFullYear() - lastYear + 1)) + lastYear;
+                const randomMonth = Math.floor(Math.random() * 12) + 1; // Meses van de 1 a 12
+                const randomDay = Math.floor(Math.random() * 28) + 1; // Un valor aleatorio para los días
+
+                return `${randomYear}-${String(randomMonth).padStart(2, '0')}-${String(randomDay).padStart(2, '0')}`;
+            }
+
+            // Manejador de eventos para el botón "Añadir a Favoritos"
+            apiSection.addEventListener('click', function (event) {
+                if (event.target.classList.contains('favorite-button')) {
+                    const container = event.target.parentElement;
+                    const title = container.querySelector('h2').textContent;
+                    const imageUrl = container.querySelector('img').src;
+                    const description = container.querySelector('p').textContent;
+
+                    // Enviar los datos al script PHP utilizando fetch
+                    fetch('añadirFavoritos.php', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: `title=${encodeURIComponent(title)}&imageUrl=${encodeURIComponent(imageUrl)}&description=${encodeURIComponent(description)}`,
+                    })
+                        .then(response => response.text())
+                        .then(data => console.log(data))
+                        .catch(error => console.error('Error al enviar datos al servidor', error));
+                }
+            });
+
+            // Evento de clic para el botón "Ver Favoritos"
+            const btnFavorites = document.getElementById('btn-favorites');
+            btnFavorites.addEventListener('click', async function () {
+                apiSection.style.display = 'none';
+                favoritesSection.style.display = 'block';
+
+                // Llamar a la función para mostrar los favoritos
+                await showFavorites();
+            });
+
+            // Evento de cambio en la barra de búsqueda
+            const searchBar = document.getElementById('search-bar');
+            searchBar.addEventListener('input', function () {
+                searchFavorites();
+            });
+
+            // Función para mostrar los favoritos desde la base de datos
+            const showFavorites = async () => {
+                try {
+                    const response = await fetch('mostrarFavoritos.php');
+                    const data = await response.json();
+
+                    // Limpiar la sección de favoritos antes de mostrar nuevos datos
+                    favoritesSection.innerHTML = '';
+
+                    // Mostrar cada favorito similar a cómo lo haces con la API
+                    data.forEach(favorite => {
+                        const container = document.createElement('div');
+
+                        const imageElement = document.createElement('img');
+                        imageElement.src = favorite.imageUrl;
+
+                        const titleElement = document.createElement('h2');
+                        titleElement.textContent = favorite.title;
+
+                        const explanationElement = document.createElement('p');
+                        explanationElement.textContent = favorite.description;
+
+                        const removeButton = document.createElement('button');
+                        removeButton.textContent = 'Quitar de Favoritos';
+                        removeButton.classList.add('remove-favorite-button');
+                        container.appendChild(removeButton);
+
+                        container.appendChild(imageElement);
+                        container.appendChild(titleElement);
+                        container.appendChild(explanationElement);
+
+                        favoritesSection.appendChild(container);
+                    });
+
+                } catch (error) {
+                    console.error('Error al obtener datos de favoritos', error);
+                }
+            };
+
+            favoritesSection.addEventListener('click', function (event) {
+                if (event.target.classList.contains('remove-favorite-button')) {
+                    const container = event.target.parentElement;
+                    const title = container.querySelector('h2').textContent;
+
+                    // Enviar los datos al script PHP para eliminar la entrada de favoritos
+                    fetch('quitarFavoritos.php', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: `title=${encodeURIComponent(title)}`,
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                // Eliminación exitosa, ocultar el contenedor en la interfaz de usuario
+                                container.style.display = 'none';
+                            } else {
+                                console.error('Error al quitar de favoritos:', data.message);
+                            }
+                        })
+                        .catch(error => console.error('Error al enviar datos al servidor', error));
+                }
+            });
+
+            // Función para buscar en los favoritos según la explicación
+            const searchFavorites = () => {
+                const searchValue = searchBar.value.toLowerCase();
+                const favorites = document.querySelectorAll('#favorites-section > div');
+
+                favorites.forEach(favorite => {
+                    const explanation = favorite.querySelector('p').textContent.toLowerCase();
+
+                    // Si el valor de búsqueda está incluido en la explicación
+                    if (explanation.includes(searchValue)) {
+                        favorite.style.display = 'block';
+                    } else {
+                        favorite.style.display = 'none';
+                    }
+                });
+            };
+        });
+    </script>
+</body>
+
+</html>
